@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mystatefulset
+spec:
+  replicas: 2
+  serviceName: my-service
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      initContainers:
+        - name: increase-vm-max-map
+          image: alpine
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+
+      containers:
+      - name: container
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.9.0
+        ports:
+          - name: communication
+            containerPort: 9200
+          - name: transport
+            containerPort: 9300
+        env: 
+            - name: cluster.name
+              value: "Elastic"
+            - name: discovery.seed_hosts
+              value: my-service
+            - name: cluster.initial_master_nodes
+              value: mystatefulset-0,mystatefulset-1 
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+
+        volumeMounts:
+          - name: volume
+            mountPath: /usr/share/elasticsearch/data
+
+  volumeClaimTemplates:
+  - metadata:
+      name: volume
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 250Mi
+      storageClassName: fast  
